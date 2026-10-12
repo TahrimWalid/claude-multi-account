@@ -1,4 +1,4 @@
-# claude-multi-account
+# Claude Multi Account Setup For Linux
 
 Run more than one Claude Code account on the same Linux machine, side by side, each as its own command (`claude2`, `work`, whatever you like).
 
