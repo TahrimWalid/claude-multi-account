@@ -319,16 +319,47 @@ else
   ok "added: $ALIAS_LINE"
 fi
 
-# Bash only reads ~/.bashrc for interactive non-login shells; SSH logins read
-# ~/.bash_profile or ~/.profile. Warn if those don't load ~/.bashrc.
+# ---------- make SSH logins load the alias ----------
+# SSH starts a login shell. Bash then reads only the FIRST of ~/.bash_profile,
+# ~/.bash_login, ~/.profile — and if that file doesn't source ~/.bashrc, the
+# alias is missing after every fresh login ("command not found").
+# We append to whichever file bash actually reads; creating ~/.bash_profile
+# next to an existing ~/.profile would stop ~/.profile being read at all.
 if [[ "$SHELL_NAME" == bash && "$RC_FILE" == "$HOME/.bashrc" ]]; then
+  info "Checking that SSH logins load ~/.bashrc"
   LOGIN_FILE=""
   for f in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
     [[ -f "$f" ]] && { LOGIN_FILE="$f"; break; }
   done
-  if [[ -n "$LOGIN_FILE" ]] && ! grep -q 'bashrc' "$LOGIN_FILE"; then
-    warn "$LOGIN_FILE doesn't load ~/.bashrc, so '$NAME' may be missing in SSH login shells."
-    warn "Fix: echo '[ -f ~/.bashrc ] && . ~/.bashrc' >> $LOGIN_FILE"
+  LOGIN_FILE="${LOGIN_FILE:-$HOME/.profile}"   # none exist: create ~/.profile
+  SOURCE_LINE='[ -n "$BASH_VERSION" ] && [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"'
+
+  if [[ -f "$LOGIN_FILE" ]] && grep -q 'bashrc' "$LOGIN_FILE"; then
+    ok "$LOGIN_FILE already loads ~/.bashrc"
+  elif [[ $DRY_RUN -eq 1 ]]; then
+    skip "[dry-run] would add to $LOGIN_FILE: $SOURCE_LINE"
+  elif ask "$LOGIN_FILE doesn't load ~/.bashrc, so '$NAME' would vanish after each SSH login. Fix it?" y; then
+    [[ -f "$LOGIN_FILE" ]] && cp -p "$LOGIN_FILE" "$LOGIN_FILE.bak.$(date +%Y%m%d%H%M%S)"
+    [[ -s "$LOGIN_FILE" && -n "$(tail -c1 "$LOGIN_FILE")" ]] && printf '\n' >> "$LOGIN_FILE"
+    printf '# load ~/.bashrc in login shells (added by add-claude-account.sh)\n%s\n' "$SOURCE_LINE" >> "$LOGIN_FILE" \
+      && ok "added to $LOGIN_FILE (backup saved next to it)" \
+      || warn "couldn't write $LOGIN_FILE — add this line yourself: $SOURCE_LINE"
+  else
+    warn "left as is. Add this line to $LOGIN_FILE yourself: $SOURCE_LINE"
+  fi
+fi
+
+# ---------- verify in a fresh login shell ----------
+# Same check as logging out and SSHing back in.
+if [[ $DRY_RUN -eq 0 && ( "$SHELL_NAME" == bash || "$SHELL_NAME" == zsh ) ]] && command -v "$SHELL_NAME" >/dev/null; then
+  info "Verifying '$NAME' in a fresh login shell"
+  CHECK_CMD=("$SHELL_NAME" -lic "type $NAME")
+  command -v timeout >/dev/null && CHECK_CMD=(timeout 15 "${CHECK_CMD[@]}")
+  if "${CHECK_CMD[@]}" </dev/null 2>/dev/null | grep -q "$NAME is .*alias"; then
+    ok "'$NAME' will be available after every login"
+  else
+    warn "couldn't confirm '$NAME' in a fresh login shell."
+    warn "Log out, SSH back in and type '$NAME'. If it's missing, run: $SHELL_NAME -lic 'type $NAME'"
   fi
 fi
 
@@ -347,8 +378,8 @@ cat <<EOF
 
   Notes:
     • Each account has its own sessions: /resume in '$NAME' only shows '$NAME' sessions.
-    • Don't run both accounts on the same project folder at the same time —
-      they edit the same files. Use separate folders, branches or git worktrees.
+    • Both accounts can work in the same project folder and edit the same files.
+      Take turns on the same file (e.g. commit, then review) to avoid clashes.
     • Each account needs its own paid plan (Pro/Max/Team/Enterprise) or API key.
     • Undo later with: $0 $NAME --remove
 
