@@ -62,13 +62,14 @@ Items that don't exist are reported as "nothing to copy". Copy errors are always
 - Rejects `claude` as a name, names with spaces, and names that are already programs.
 - Refuses to run under `sudo` (it would set up the account for root).
 - Offers to install Claude Code if it's missing.
-- Detects bash, zsh and fish; warns if SSH logins won't load `~/.bashrc`.
+- Detects bash, zsh and fish.
+- Fixes the SSH "command not found" problem: if your login shell doesn't load `~/.bashrc`, it adds the line to the file bash actually reads, then confirms the alias works in a fresh login shell.
 - Backs up your shell startup file before every change.
 - Warns if `settings.json` contains paths pointing into the old folder.
 
 ## Notes
 
-- Don't run two accounts on the same project folder at the same time. Use separate folders, branches or git worktrees.
+- Both accounts can work in the same project folder and edit the same files. Take turns on the same file (for example, one codes and commits, the other reviews) to avoid clashes.
 - Each account needs its own paid plan (Pro, Max, Team or Enterprise) or an API key.
 - This is for keeping separate accounts apart, such as work and personal. Check Anthropic's terms for your plans.
 
